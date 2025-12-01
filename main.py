@@ -674,3 +674,83 @@ if __name__ == "__main__":
     except Exception as e:
         logger.warning(f"No se pudo generar reporte HTML automáticamente: {e}")
         logger.info(f"Puedes generarlo manualmente: python generar_reporte.py {output_jsonl}")
+
+    # Subir archivos a MinIO
+    logger.info("\n" + "="*80)
+    logger.info("SUBIENDO ARCHIVOS A MINIO")
+    logger.info("="*80)
+
+    try:
+        from minio_client import upload_auditoria_files
+
+        # Determinar archivo HTML
+        output_html = output_jsonl.replace('.jsonl', '.html')
+
+        # Determinar archivo de log
+        log_filename = f"logs/auditoria_{datetime.now():%Y%m%d}.log"
+
+        # Extraer fecha del timestamp para organizar en carpetas (formato YYYYMMDD)
+        fecha_carpeta = timestamp.split('_')[0]  # Extrae "20251114" de "20251114_153045"
+
+        # Subir archivos
+        results = upload_auditoria_files(
+            jsonl_path=output_jsonl,
+            html_path=output_html if os.path.exists(output_html) else None,
+            tracking_path=state_file,
+            log_path=log_filename if os.path.exists(log_filename) else None,
+            fecha_carpeta=fecha_carpeta
+        )
+
+        # Mostrar resultados
+        if results["exitosos"]:
+            logger.info(f"Archivos subidos exitosamente a MinIO: {len(results['exitosos'])}")
+            for archivo in results["exitosos"]:
+                logger.info(f"  - {os.path.basename(archivo)}")
+
+        if results["fallidos"]:
+            logger.warning(f"Archivos que no se pudieron subir: {len(results['fallidos'])}")
+            for archivo in results["fallidos"]:
+                logger.warning(f"  - {os.path.basename(archivo)}")
+
+    except ImportError:
+        logger.warning("Módulo minio_client no disponible. Saltando subida a MinIO.")
+        logger.info("Para habilitar MinIO: pip install minio y configurar variables en .env")
+    except Exception as e:
+        logger.error(f"Error al subir archivos a MinIO: {e}")
+        logger.info("Los archivos están disponibles localmente en la carpeta output/")
+
+    # Enviar reporte por correo electrónico
+    logger.info("\n" + "="*80)
+    logger.info("ENVIANDO REPORTE POR CORREO ELECTRÓNICO")
+    logger.info("="*80)
+
+    try:
+        from email_sender import enviar_reporte_por_correo
+
+        # Determinar archivos
+        output_html = output_jsonl.replace('.jsonl', '.html')
+        log_filename = f"logs/auditoria_{datetime.now():%Y%m%d}.log"
+
+        # Extraer fecha para el asunto del correo
+        fecha_reporte = datetime.now().strftime("%Y-%m-%d")
+
+        # Enviar correo
+        enviado = enviar_reporte_por_correo(
+            jsonl_path=output_jsonl if os.path.exists(output_jsonl) else None,
+            html_path=output_html if os.path.exists(output_html) else None,
+            tracking_path=state_file if os.path.exists(state_file) else None,
+            log_path=log_filename if os.path.exists(log_filename) else None,
+            fecha_reporte=fecha_reporte
+        )
+
+        if enviado:
+            logger.info("Reporte enviado por correo exitosamente")
+        else:
+            logger.warning("No se pudo enviar el correo (ver logs para detalles)")
+
+    except ImportError:
+        logger.warning("Módulo email_sender no disponible. Saltando envío de correo.")
+        logger.info("El módulo email_sender.py debe estar en el directorio del proyecto")
+    except Exception as e:
+        logger.error(f"Error al enviar correo: {e}")
+        logger.info("Los archivos están disponibles localmente en la carpeta output/")

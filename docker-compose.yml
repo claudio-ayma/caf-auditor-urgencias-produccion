@@ -1,0 +1,135 @@
+# ===================================================================
+# DOCKER COMPOSE - SISTEMA DE AUDITORIA DE URGENCIAS
+# ===================================================================
+# Compatible con Dokploy para despliegue en produccion
+# El contenedor se mantiene activo para ejecutar schedules
+# ===================================================================
+
+version: '3.8'
+
+services:
+  # -----------------------------------------------------------------
+  # SERVICIO PRINCIPAL: Auditoria de Urgencias
+  # -----------------------------------------------------------------
+  auditoria-urgencias:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: caf_auditor_urgencias
+
+    # Politica de reinicio automatico
+    restart: unless-stopped
+
+    # Variables de entorno desde archivo .env
+    env_file:
+      - .env
+
+    # Volumenes para persistencia de datos
+    # NOTA: Los archivos se guardan principalmente en MinIO,
+    # pero mantenemos volumenes locales por si acaso
+    volumes:
+      # Outputs locales temporales (opcional, MinIO es primario)
+      - urgencias_output:/app/output
+      - urgencias_logs:/app/logs
+
+      # Si necesitas montar un directorio especifico de tu VPS:
+      # - /ruta/en/vps/output:/app/output
+      # - /ruta/en/vps/logs:/app/logs
+
+    # Red de Dokploy (IMPORTANTE)
+    networks:
+      - dokploy-network
+
+    # Healthcheck para monitoreo
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Recursos (ajusta segun tu VPS)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 512M
+
+    # Labels para Dokploy (opcional pero util)
+    labels:
+      - "com.dokploy.project=auditoria-urgencias"
+      - "com.dokploy.service=auditoria"
+      - "com.dokploy.version=1.0.0"
+
+# -----------------------------------------------------------------
+# VOLUMENES
+# -----------------------------------------------------------------
+volumes:
+  urgencias_output:
+    driver: local
+    labels:
+      - "com.dokploy.project=auditoria-urgencias"
+
+  urgencias_logs:
+    driver: local
+    labels:
+      - "com.dokploy.project=auditoria-urgencias"
+
+# -----------------------------------------------------------------
+# REDES
+# -----------------------------------------------------------------
+# IMPORTANTE: Usa la red de Dokploy para permitir comunicacion
+# entre servicios y acceso a la base de datos si esta en la misma red
+networks:
+  dokploy-network:
+    external: true
+
+# ===================================================================
+# CONFIGURACION DE SCHEDULES EN DOKPLOY
+# ===================================================================
+#
+# Schedule 1: Auditoria Diaria Completa (8:00 AM)
+# -----------------------------------------------------------------
+# Service Name:    auditoria-urgencias
+# Task Name:       Auditoria Diaria Urgencias 8am
+# Schedule:        0 8 * * *
+# Shell Type:      Bash
+# Command:         python main.py
+# Enabled:         SI
+#
+# Schedule 2: Auditoria de Prueba (Opcional - cada 5 min)
+# -----------------------------------------------------------------
+# Service Name:    auditoria-urgencias
+# Task Name:       Test cada 5 min
+# Schedule:        */5 * * * *
+# Shell Type:      Bash
+# Command:         python main.py
+# Enabled:         SI (solo para testing, desactivar en produccion)
+#
+# ===================================================================
+# COMANDOS UTILES PARA TESTING
+# ===================================================================
+#
+# 1. Ver logs del contenedor:
+#    docker-compose logs -f auditoria-urgencias
+#
+# 2. Ejecutar auditoria manualmente:
+#    docker-compose exec auditoria-urgencias python main.py
+#
+# 3. Ejecutar auditoria individual:
+#    docker-compose exec auditoria-urgencias python auditar_atencion.py 2025/130411
+#
+# 4. Acceder al contenedor:
+#    docker-compose exec auditoria-urgencias bash
+#
+# 5. Ver archivos generados:
+#    docker-compose exec auditoria-urgencias ls -lah /app/output
+#
+# 6. Reiniciar contenedor:
+#    docker-compose restart auditoria-urgencias
+#
+# ===================================================================
