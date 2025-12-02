@@ -1,5 +1,5 @@
 """
-Módulo de Envío de Correos para Sistema de Auditoría de URGENCIAS
+Módulo de Envío de Correos para Sistema de Auditoría
 Envía reportes de auditoría por correo electrónico con archivos adjuntos
 """
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmailSender:
-    """Cliente SMTP para envío de reportes de auditoría de urgencias"""
+    """Cliente SMTP para envío de reportes de auditoría"""
 
     def __init__(self):
         """Inicializa configuración SMTP desde variables de entorno"""
@@ -115,57 +115,41 @@ class EmailSender:
             logger.info(f"Archivos adjuntos: {len(archivos_adjuntos)}")
 
             with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                server.set_debuglevel(0)  # Cambiar a 1 para debug detallado
-
-                # FIX: Usar AUTH PLAIN que maneja mejor caracteres especiales
+                # FIX DEFINITIVO: smtplib.login() falla con caracteres UTF-8
+                # Solución: Usar AUTH LOGIN manual con base64
                 try:
-                    # Intento 1: login() normal
+                    # Intento 1: login() normal (para passwords ASCII)
                     server.login(self.smtp_user, self.smtp_password)
-                    logger.info("Autenticacion SMTP exitosa (login normal)")
-                except (UnicodeEncodeError, UnicodeDecodeError, smtplib.SMTPAuthenticationError) as auth_err:
-                    # Intento 2: AUTH LOGIN manual con base64
-                    logger.warning(f"Login normal fallo ({type(auth_err).__name__}), intentando AUTH LOGIN manual...")
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    # Intento 2: AUTH LOGIN manual con base64 (para passwords UTF-8)
+                    logger.warning("⚠️ Password con caracteres especiales, usando AUTH LOGIN manual...")
 
                     # Codificar credenciales en base64 (UTF-8)
                     user_b64 = base64.b64encode(self.smtp_user.encode('utf-8')).decode('ascii')
                     pass_b64 = base64.b64encode(self.smtp_password.encode('utf-8')).decode('ascii')
 
-                    # AUTH LOGIN con verificacion de respuestas
-                    code, resp = server.docmd("AUTH LOGIN")
-                    if code != 334:
-                        raise smtplib.SMTPAuthenticationError(code, f"AUTH LOGIN fallo: {resp}")
+                    # Enviar comandos SMTP manualmente
+                    server.docmd("AUTH LOGIN")
+                    server.docmd(user_b64)
+                    server.docmd(pass_b64)
 
-                    code, resp = server.docmd(user_b64)
-                    if code != 334:
-                        raise smtplib.SMTPAuthenticationError(code, f"Usuario rechazado: {resp}")
+                # Usar send_message con policy UTF-8
+                server.send_message(msg)
 
-                    code, resp = server.docmd(pass_b64)
-                    if code != 235:
-                        raise smtplib.SMTPAuthenticationError(code, f"Password rechazado: {resp}")
-
-                    logger.info("Autenticacion SMTP exitosa (AUTH LOGIN manual)")
-
-                # Enviar usando sendmail para mejor compatibilidad
-                server.sendmail(
-                    self.from_email,
-                    destinatarios,
-                    msg.as_string()
-                )
-
-            logger.info(f"Correo enviado exitosamente")
+            logger.info(f"✅ Correo enviado exitosamente")
             for dest in destinatarios:
                 logger.info(f"  - {dest}")
 
             return True
 
         except smtplib.SMTPAuthenticationError:
-            logger.error("Error de autenticación SMTP - Verificar usuario/contraseña")
+            logger.error("❌ Error de autenticación SMTP - Verificar usuario/contraseña")
             return False
         except smtplib.SMTPException as e:
-            logger.error(f"Error SMTP al enviar correo: {e}")
+            logger.error(f"❌ Error SMTP al enviar correo: {e}")
             return False
         except Exception as e:
-            logger.error(f"Error inesperado al enviar correo: {e}")
+            logger.error(f"❌ Error inesperado al enviar correo: {e}")
             return False
 
     def _adjuntar_archivo(self, msg: MIMEMultipart, file_path: str):
@@ -195,7 +179,7 @@ class EmailSender:
         if not fecha_reporte:
             fecha_reporte = datetime.now().strftime("%Y-%m-%d")
 
-        return f"Reporte de Auditoria de Urgencias - {fecha_reporte}"
+        return f"📊 Reporte de Auditoría de Urgencias - {fecha_reporte}"
 
     def _generar_cuerpo_texto(self, fecha_reporte: Optional[str]) -> str:
         """Genera cuerpo del correo en texto plano"""
@@ -203,21 +187,22 @@ class EmailSender:
             fecha_reporte = datetime.now().strftime("%Y-%m-%d")
 
         return f"""
-Reporte de Auditoria de Urgencias
-Clinica Foianini - {fecha_reporte}
+Reporte de Auditoría de Urgencias
+Clínica Foianini - {fecha_reporte}
 
-Este correo contiene los reportes de auditoria de las atenciones de urgencias.
+Este correo contiene los reportes de auditoría de las atenciones de urgencia.
 
 Archivos adjuntos:
+- JSONL: Datos de auditoría en formato JSON Lines
 - HTML: Reporte visual interactivo
+- Tracking: Estado del proceso de auditoría
+- Log: Registro detallado de ejecución
 
 Para visualizar el reporte completo, abra el archivo HTML adjunto en su navegador.
 
-Los archivos JSONL, tracking y logs estan disponibles en MinIO.
-
 ---
-Sistema de Auditoria Automatizada
-Clinica Foianini
+Sistema de Auditoría Automatizada
+Clínica Foianini
         """.strip()
 
     def _generar_cuerpo_html(
@@ -244,7 +229,7 @@ Clinica Foianini
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reporte de Auditoria</title>
+    <title>Reporte de Auditoría</title>
     <style>
         /* Reset y base */
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -273,9 +258,9 @@ Clinica Foianini
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }}
 
-        /* Header con gradiente - COLOR DIFERENTE PARA URGENCIAS (verde-azul) */
+        /* Header con gradiente */
         .header {{
-            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
             color: white;
             text-align: center;
             padding: 30px 20px;
@@ -304,17 +289,17 @@ Clinica Foianini
             font-size: 15px;
         }}
 
-        /* Caja destacada - COLOR URGENCIAS */
+        /* Caja destacada */
         .highlight {{
-            background: linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%);
-            border-left: 4px solid #0d9488;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-left: 4px solid #3b82f6;
             padding: 16px;
             border-radius: 8px;
             margin: 20px 0;
         }}
 
         .highlight strong {{
-            color: #0f766e;
+            color: #1e40af;
             display: block;
             margin-bottom: 6px;
             font-size: 15px;
@@ -326,7 +311,7 @@ Clinica Foianini
             font-size: 14px;
         }}
 
-        /* Seccion de archivo adjunto */
+        /* Sección de archivo adjunto */
         .attachment-box {{
             background-color: #f9fafb;
             border: 2px dashed #d1d5db;
@@ -337,7 +322,7 @@ Clinica Foianini
         }}
 
         .attachment-box h3 {{
-            color: #0f766e;
+            color: #1e40af;
             font-size: 16px;
             margin: 0 0 12px 0;
         }}
@@ -352,7 +337,7 @@ Clinica Foianini
             font-size: 14px;
         }}
 
-        /* Lista de caracteristicas */
+        /* Lista de características */
         .features {{
             margin: 24px 0;
         }}
@@ -378,12 +363,12 @@ Clinica Foianini
         }}
 
         .features li:before {{
-            content: "OK";
+            content: "✓";
             position: absolute;
             left: 0;
             color: #10b981;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 16px;
         }}
 
         /* Footer */
@@ -400,7 +385,7 @@ Clinica Foianini
             font-size: 13px;
         }}
 
-        /* Responsive para pantallas muy pequenas */
+        /* Responsive para pantallas muy pequeñas */
         @media only screen and (max-width: 480px) {{
             .email-wrapper {{
                 padding: 10px 5px;
@@ -421,50 +406,50 @@ Clinica Foianini
         <div class="container">
             <!-- Header -->
             <div class="header">
-                <h1>Reporte de Auditoria de Urgencias</h1>
-                <p>Clinica Foianini - {fecha_reporte}</p>
+                <h1>📊 Reporte de Auditoría de Urgencias</h1>
+                <p>Clínica Foianini · {fecha_reporte}</p>
             </div>
 
             <!-- Contenido -->
             <div class="content">
                 <p>Estimado/a,</p>
 
-                <p>Se ha completado la auditoria medica automatizada de las atenciones de <strong>urgencias</strong> del dia <strong>{fecha_reporte}</strong>.</p>
+                <p>Se ha completado la auditoría médica automatizada de las atenciones de urgencias del día <strong>{fecha_reporte}</strong>.</p>
 
                 <!-- Destacado -->
                 <div class="highlight">
-                    <strong>Como visualizar el reporte</strong>
-                    <p>Descargue el archivo HTML adjunto y abralo en su navegador web para acceder al reporte completo con filtros interactivos por medico.</p>
+                    <strong>💡 Cómo visualizar el reporte</strong>
+                    <p>Descargue el archivo HTML adjunto y ábralo en su navegador web para acceder al reporte completo con filtros interactivos por médico.</p>
                 </div>
 
                 <!-- Archivo adjunto -->
                 <div class="attachment-box">
-                    <div class="attachment-icon">HTML</div>
+                    <div class="attachment-icon">📄</div>
                     <h3>Archivo Adjunto</h3>
                     <div class="attachment-info">
                         {archivo_info}
                     </div>
                 </div>
 
-                <!-- Caracteristicas del reporte -->
+                <!-- Características del reporte -->
                 <div class="features">
                     <h3>El reporte incluye:</h3>
                     <ul>
-                        <li>Evaluacion segun guias clinicas internacionales (WHO, AHA, NICE, ERC, ACEP, ACS)</li>
-                        <li>Scores de calidad (0-100) por cada atencion</li>
+                        <li>Evaluación según guías clínicas internacionales (WHO, AHA, NICE, ERC, ACEP, ACS)</li>
+                        <li>Scores de calidad (0-100) por cada atención</li>
                         <li>Criterios cumplidos y no cumplidos</li>
-                        <li>Hallazgos criticos y recomendaciones especificas</li>
-                        <li>Resumen ejecutivo agrupado por medico</li>
-                        <li>Filtros interactivos para analisis detallado</li>
+                        <li>Hallazgos críticos y recomendaciones específicas</li>
+                        <li>Resumen ejecutivo agrupado por médico</li>
+                        <li>Filtros interactivos para análisis detallado</li>
                     </ul>
                 </div>
             </div>
 
             <!-- Footer -->
             <div class="footer">
-                <p><strong>Sistema de Auditoria Automatizada - URGENCIAS</strong></p>
-                <p>Clinica Foianini</p>
-                <p>Este es un correo automatico - No responder</p>
+                <p><strong>Sistema de Auditoría Automatizada</strong></p>
+                <p>Clínica Foianini</p>
+                <p>Este es un correo automático · No responder</p>
             </div>
         </div>
     </div>
@@ -483,7 +468,7 @@ def enviar_reporte_por_correo(
     fecha_reporte: Optional[str] = None
 ) -> bool:
     """
-    Función helper para enviar reporte de auditoría de urgencias por correo
+    Función helper para enviar reporte de auditoría por correo
 
     Args:
         jsonl_path: Ruta del archivo JSONL
@@ -546,17 +531,17 @@ if __name__ == "__main__":
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    print("Test de envio de correo")
+    print("🧪 Test de envío de correo")
     print("=" * 80)
 
     # Test de configuración
     try:
         sender = EmailSender()
-        print(f"Cliente SMTP configurado correctamente")
+        print(f"✅ Cliente SMTP configurado correctamente")
         print(f"   Servidor: {sender.smtp_server}:{sender.smtp_port}")
         print(f"   Usuario: {sender.smtp_user}")
         print(f"   Remitente: {sender.from_name} <{sender.from_email}>")
     except Exception as e:
-        print(f"Error al configurar cliente SMTP: {e}")
-        print("\nVerifica que las siguientes variables esten en .env:")
+        print(f"❌ Error al configurar cliente SMTP: {e}")
+        print("\n💡 Verifica que las siguientes variables estén en .env:")
         print("   SMTP_USER, SMTP_PASSWORD, EMAIL_DESTINATARIOS")
