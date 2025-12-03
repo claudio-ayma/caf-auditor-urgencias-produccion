@@ -6,6 +6,57 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.
 
 ---
 
+## [1.1.0] - 2025-12-02
+
+### Added - Solicitudes de Laboratorio
+
+**Mejora crítica que elimina falsos negativos en la evaluación de laboratorios solicitados.**
+
+#### Problema Resuelto
+
+El sistema anterior solo veía laboratorios con **resultados ya registrados** en `vw_hc_resultados_laboratorio`. Esto causaba que estudios como urocultivos (que tardan 48-72h) fueran marcados como "no solicitados" aunque el médico sí los hubiera ordenado.
+
+**Ejemplo real (cuenta 2025/152502):**
+- Score anterior: 88/100 (penalizaba urocultivo y EGO como "no solicitados")
+- Score corregido: 92/100 (reconoce correctamente que SÍ fueron solicitados)
+
+#### Cambios Realizados
+
+**`queries/get_detalle_atencion.sql`**
+- Nueva sección **8. SOLICITUDES DE LABORATORIO**
+- Query que une:
+  - `pacientesolicudlaboratorio` (cabecera de solicitudes)
+  - `pacientesolicudlaboratoriolabo` (detalle de estudios)
+  - `clinica01.productos` (descripción de estudios)
+- Trae TODOS los laboratorios solicitados, independientemente de si tienen resultado
+
+**`main.py` - Función `formatear_atencion_para_llm()`**
+- Nueva sección "SOLICITUDES DE LABORATORIO (ÓRDENES MÉDICAS)" en el texto enviado a Claude
+- Incluye nota explicativa para la IA sobre la diferencia con resultados
+
+**`main.py` - Prompt del sistema**
+- Actualizada sección "INTERPRETACIÓN DE LABORATORIOS" con nuevas reglas:
+  - Dos secciones de laboratorios: RESULTADOS vs SOLICITUDES
+  - La sección de SOLICITUDES es la fuente de verdad
+  - Un estudio puede estar solicitado pero sin resultado aún
+  - Solo evaluar como "no solicitado" si no aparece en NINGUNA sección
+
+#### Tablas de Base de Datos Utilizadas
+
+| Tabla | Propósito |
+|-------|-----------|
+| `pacientesolicudlaboratorio` | Cabecera de solicitudes (~286,875 registros) |
+| `pacientesolicudlaboratoriolabo` | Detalle de estudios por solicitud |
+| `clinica01.productos` | Catálogo con descripción de estudios |
+
+#### Impacto
+
+- ✅ Eliminados falsos negativos en urocultivos, cultivos y otros estudios de larga espera
+- ✅ Evaluación más justa del trabajo médico real
+- ✅ Score más preciso y representativo de la calidad asistencial
+
+---
+
 ## [1.0.0] - 2025-11-26
 
 ### Inicial Release - Adaptado de Sistema de Emergencias

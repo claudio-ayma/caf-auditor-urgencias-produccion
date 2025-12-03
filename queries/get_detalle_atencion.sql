@@ -217,6 +217,33 @@ SELECT
           AND enc.cuenta_internacion = {cuenta_internacion}
           AND enc.cuenta_id = {cuenta_id}
         ORDER BY enc.fecha_estudio ASC
-    ) AS estudios_imagen
+    ) AS estudios_imagen,
+
+    -- ========================================================================
+    -- 8. SOLICITUDES DE LABORATORIO (incluye pendientes sin resultado)
+    -- ========================================================================
+    -- Esta sección muestra TODOS los laboratorios solicitados, independientemente
+    -- de si ya tienen resultado o no. Complementa la sección 6 que solo muestra
+    -- laboratorios CON resultados.
+    -- ========================================================================
+    (
+        SELECT GROUP_CONCAT(
+            DISTINCT CONCAT(
+                'Estudio: ', prod.Descripcion,
+                ' | Fecha solicitud: ', maestro.PacienteSolicudLaboratorioSFec,
+                ' | Codigo: ', prod.CodProdCMF
+            )
+            SEPARATOR '\n'
+        )
+        FROM pacientesolicudlaboratorio maestro
+        INNER JOIN pacientesolicudlaboratoriolabo det
+            ON det.PacienteSolicudLaboratorioCodi = maestro.PacienteSolicudLaboratorioCodi
+        INNER JOIN clinica01.productos prod
+            ON prod.CodProdCMF = det.productosCodProdCMF
+        WHERE maestro.PacienteLaboCodigo = {persona_numero}
+          AND maestro.PacienteSolicudLaboratorioGest = {cuenta_gestion}
+          AND maestro.PacienteSolicudLaboratorioNroI = {cuenta_internacion}
+        ORDER BY maestro.PacienteSolicudLaboratorioSFec ASC
+    ) AS solicitudes_laboratorio
 
 FROM DUAL;

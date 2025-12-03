@@ -232,11 +232,22 @@ class AuditorLLM:
         - Evalúa si lo que se HIZO fue correcto según guías, no si se documentó bien
 
         ⚠️ IMPORTANTE - INTERPRETACIÓN DE LABORATORIOS:
-        - Si aparece un RESULTADO de laboratorio en la sección "RESULTADOS DE LABORATORIO", significa que el médico SÍ SOLICITÓ ese laboratorio
-        - Ejemplo: Si ves "Servicio: Troponina I Cuantitativa | Fecha: 2025-11-10 | Lab #1", entonces el médico SÍ solicitó troponina
-        - NO digas "no se solicitó X laboratorio" si el resultado de X aparece en el historial
-        - Solo evalúa si los laboratorios solicitados (que aparecen con resultados) fueron los APROPIADOS según guías
-        - Si falta un laboratorio crítico que NO aparece en resultados, entonces SÍ menciona que faltó solicitarlo
+        El historial tiene DOS secciones de laboratorios:
+        1. "RESULTADOS DE LABORATORIO": Laboratorios con resultados ya disponibles
+        2. "SOLICITUDES DE LABORATORIO (ÓRDENES MÉDICAS)": TODOS los laboratorios solicitados (con o sin resultado)
+
+        REGLAS DE INTERPRETACIÓN:
+        - Si un laboratorio aparece en "SOLICITUDES DE LABORATORIO", el médico SÍ LO SOLICITÓ
+        - Un laboratorio puede estar SOLICITADO pero sin resultado aún (ej: urocultivo tarda 48-72h)
+        - NO digas "no se solicitó X" si X aparece en la sección de SOLICITUDES
+        - La sección de SOLICITUDES es la fuente de verdad sobre qué ordenó el médico
+        - La sección de RESULTADOS solo muestra los que ya tienen valores
+
+        Ejemplo correcto:
+        - Si ves "Estudio: UROCULTIVO | Fecha solicitud: 2025-12-01" en SOLICITUDES → SÍ se solicitó
+        - Aunque no aparezca en RESULTADOS (porque tarda días), el médico SÍ cumplió con solicitarlo
+
+        Solo evalúa como "no solicitado" si el estudio NO aparece en NINGUNA de las dos secciones.
 
         ⚠️ IMPORTANTE - INTERPRETACIÓN DE TIEMPOS DE OBSERVACIÓN E INTERNACIÓN:
         - Si el paciente fue INTERNADO (pasó a piso/hospitalización), la observación CONTINÚA en internación
@@ -459,6 +470,19 @@ ESTUDIOS DE IMAGEN
 """
         for img in imagenes:
             texto += f"{img}\n{'-'*80}\n"
+
+    if detalle.get('solicitudes_laboratorio'):
+        texto += f"""
+=================================================================================
+SOLICITUDES DE LABORATORIO (ÓRDENES MÉDICAS)
+=================================================================================
+NOTA: Esta sección muestra TODOS los laboratorios SOLICITADOS por el médico,
+independientemente de si ya tienen resultado. Un estudio que aparece aquí
+FUE SOLICITADO aunque no tenga resultado en la sección anterior.
+
+{detalle['solicitudes_laboratorio']}
+
+"""
 
     texto += "=" * 80 + "\n"
     return texto
