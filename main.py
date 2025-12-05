@@ -249,6 +249,24 @@ class AuditorLLM:
 
         Solo evalúa como "no solicitado" si el estudio NO aparece en NINGUNA de las dos secciones.
 
+        ⚠️ IMPORTANTE - INTERPRETACIÓN DE ESTUDIOS DE IMAGEN:
+        El historial tiene DOS secciones de imágenes:
+        1. "ESTUDIOS DE IMAGEN": Imágenes con informe radiológico ya disponible
+        2. "SOLICITUDES DE IMAGEN (ÓRDENES MÉDICAS)": TODOS los estudios solicitados (con o sin informe)
+
+        REGLAS DE INTERPRETACIÓN:
+        - Si un estudio aparece en "SOLICITUDES DE IMAGEN", el médico SÍ LO SOLICITÓ
+        - Un estudio puede estar SOLICITADO pero sin informe aún (ej: RX pendiente de lectura)
+        - NO digas "no se solicitó RX/TAC/ECO" si aparece en la sección de SOLICITUDES
+        - La sección de SOLICITUDES DE IMAGEN es la fuente de verdad sobre qué ordenó el médico
+        - La sección de ESTUDIOS DE IMAGEN solo muestra los que ya tienen informe radiológico
+
+        Ejemplo correcto:
+        - Si ves "Estudio: Radiografía Torax Posteroanterior | Fecha solicitud: 2025-12-03" en SOLICITUDES → SÍ se solicitó
+        - Aunque no aparezca en ESTUDIOS DE IMAGEN (porque no tiene informe), el médico SÍ cumplió con solicitarlo
+
+        Solo evalúa como "no solicitado" si el estudio NO aparece en NINGUNA de las dos secciones de imagen.
+
         ⚠️ IMPORTANTE - INTERPRETACIÓN DE TIEMPOS DE OBSERVACIÓN E INTERNACIÓN:
         - Si el paciente fue INTERNADO (pasó a piso/hospitalización), la observación CONTINÚA en internación
         - NO penalices "tiempo insuficiente en urgencias" si hubo decisión de internación
@@ -481,6 +499,21 @@ independientemente de si ya tienen resultado. Un estudio que aparece aquí
 FUE SOLICITADO aunque no tenga resultado en la sección anterior.
 
 {detalle['solicitudes_laboratorio']}
+
+
+"""
+
+    if detalle.get('solicitudes_imagen'):
+        texto += f"""
+=================================================================================
+SOLICITUDES DE IMAGEN (ÓRDENES MÉDICAS)
+=================================================================================
+NOTA: Esta sección muestra TODOS los estudios de imagen SOLICITADOS por el médico
+(RX, TAC, Ecografías, RM, etc.), independientemente de si ya tienen informe.
+Un estudio que aparece aquí FUE SOLICITADO aunque no tenga resultado/informe
+en la sección "ESTUDIOS DE IMAGEN" anterior.
+
+{detalle['solicitudes_imagen']}
 
 """
 

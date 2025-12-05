@@ -244,6 +244,36 @@ SELECT
           AND maestro.PacienteSolicudLaboratorioGest = {cuenta_gestion}
           AND maestro.PacienteSolicudLaboratorioNroI = {cuenta_internacion}
         ORDER BY maestro.PacienteSolicudLaboratorioSFec ASC
-    ) AS solicitudes_laboratorio
+    ) AS solicitudes_laboratorio,
+
+    -- ========================================================================
+    -- 9. SOLICITUDES DE IMAGEN/ESTUDIOS (incluye pendientes sin informe)
+    -- ========================================================================
+    -- Esta sección muestra TODOS los estudios de imagen solicitados,
+    -- independientemente de si ya tienen informe radiológico o no.
+    -- Complementa la sección 7 que solo muestra imágenes CON resultados.
+    -- FIX v1.2.0: Resuelve falsos negativos donde RX/TAC/ECO aparecían como
+    -- "no solicitados" cuando simplemente no tenían informe aún.
+    -- ========================================================================
+    (
+        SELECT GROUP_CONCAT(
+            DISTINCT CONCAT(
+                'Estudio: ', prest.PrestacionDescripcion,
+                ' | Fecha solicitud: ', sol.PacienteSolicudEstudioSFecha,
+                ' | Codigo: ', prest.PrestacionCodigo
+            )
+            SEPARATOR '\n'
+        )
+        FROM pacientesolicudestudio sol
+        INNER JOIN prestacion prest
+            ON prest.PrestacionCodigo = sol.PrestacionCodigo
+        INNER JOIN turnoatencion ate
+            ON ate.TurnoNumero = sol.TurnoNumero
+        WHERE sol.Pacienteimagencodigo = {persona_numero}
+          AND ate.InternacionesGestion = {cuenta_gestion}
+          AND ate.InternacionesNroInternacion = {cuenta_internacion}
+          AND ate.InternacionesNroIntId = {cuenta_id}
+        ORDER BY sol.PacienteSolicudEstudioSFecha ASC
+    ) AS solicitudes_imagen
 
 FROM DUAL;

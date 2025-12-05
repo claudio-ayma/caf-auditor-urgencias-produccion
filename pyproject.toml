@@ -1,6 +1,6 @@
 [project]
 name = "auditoria-urgencia"
-version = "1.1.0"
+version = "1.2.0"
 description = "Sistema de auditoría de médicos de urgencias según guías internacionales"
 readme = "README.md"
 requires-python = ">=3.13"

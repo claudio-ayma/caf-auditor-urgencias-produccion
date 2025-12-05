@@ -6,6 +6,66 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.
 
 ---
 
+## [1.2.0] - 2025-12-03
+
+### Added - Solicitudes de Imagen
+
+**Mejora crítica que elimina falsos negativos en la evaluación de estudios de imagen solicitados.**
+
+#### Problema Resuelto
+
+El sistema anterior solo veía estudios de imagen con **informe radiológico ya registrado** en `vw_hc_resultados_imagenes_*`. Esto causaba que radiografías, TACs, ecografías y otros estudios fueran marcados como "no solicitados" aunque el médico sí los hubiera ordenado, simplemente porque aún no tenían informe.
+
+**Ejemplo real (cuenta 2025/153107):**
+- Auditoría anterior: ❌ "NO se solicitó radiografía de tórax - CRÍTICO"
+- Auditoría corregida: ✅ "Solicitó radiografía de tórax para descartar neumonía"
+- Evaluación de estudios: "PARCIALMENTE ADECUADO" → "APROPIADOS"
+
+#### Cambios Realizados
+
+**`queries/get_detalle_atencion.sql`**
+- Nueva sección **9. SOLICITUDES DE IMAGEN/ESTUDIOS**
+- Query que une:
+  - `pacientesolicudestudio` (solicitudes de estudios de imagen)
+  - `prestacion` (catálogo de prestaciones/estudios)
+  - `turnoatencion` (vínculo con la cuenta del paciente)
+- Trae TODOS los estudios de imagen solicitados, independientemente de si tienen informe
+
+**`main.py` - Función `formatear_atencion_para_llm()`**
+- Nueva sección "SOLICITUDES DE IMAGEN (ÓRDENES MÉDICAS)" en el texto enviado a Claude
+- Incluye nota explicativa para la IA sobre la diferencia entre solicitudes e informes
+
+**`main.py` - Prompt del sistema**
+- Nueva sección "INTERPRETACIÓN DE ESTUDIOS DE IMAGEN" con reglas claras:
+  - Dos secciones de imágenes: ESTUDIOS DE IMAGEN (con informe) vs SOLICITUDES DE IMAGEN (órdenes)
+  - La sección de SOLICITUDES DE IMAGEN es la fuente de verdad
+  - Un estudio puede estar solicitado pero sin informe aún (ej: RX pendiente de lectura)
+  - Solo evaluar como "no solicitado" si no aparece en NINGUNA de las dos secciones
+
+#### Tablas de Base de Datos Utilizadas
+
+| Tabla | Propósito |
+|-------|-----------|
+| `pacientesolicudestudio` | Solicitudes de estudios de imagen |
+| `prestacion` | Catálogo de prestaciones (RX, TAC, ECO, RM, etc.) |
+| `turnoatencion` | Vínculo entre solicitud y cuenta del paciente |
+
+#### Impacto
+
+- ✅ Eliminados falsos negativos en radiografías, TACs, ecografías y otros estudios
+- ✅ Evaluación más justa cuando el estudio fue ordenado pero aún no tiene informe
+- ✅ Consistencia con el fix de laboratorios (v1.1.0) - mismo patrón de "solicitudes vs resultados"
+- ✅ Score más preciso y representativo del trabajo médico real
+
+#### Validación
+
+- ✅ Query validado con cuenta 2025/153107 - Retorna "Radiografía Torax Posteroanterior"
+- ✅ Historial raw muestra nueva sección de SOLICITUDES DE IMAGEN
+- ✅ Claude reconoce correctamente estudios solicitados aunque no tengan informe
+
+---
+
+
 ## [1.1.0] - 2025-12-02
 
 ### Added - Solicitudes de Laboratorio
