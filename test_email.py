@@ -31,12 +31,11 @@ try:
 
     load_dotenv()
 
-    # Mostrar configuracion (sin password)
+    # Mostrar configuracion
     print(f"\nConfiguracion:")
-    print(f"  SMTP Server: {os.getenv('SMTP_SERVER')}")
-    print(f"  SMTP Port: {os.getenv('SMTP_PORT')}")
-    print(f"  SMTP User: {os.getenv('SMTP_USER')}")
-    print(f"  From Email: {os.getenv('SMTP_FROM_EMAIL')}")
+    print(f"  SMTP Server: {os.getenv('SMTP_SERVER', 'mail.correo-caf.com')}")
+    print(f"  SMTP Port: {os.getenv('SMTP_PORT', '25')}")
+    print(f"  From Email: {os.getenv('SMTP_FROM_EMAIL', 'auditoria@correo-caf.com')}")
     print(f"  Destinatarios: {os.getenv('EMAIL_DESTINATARIOS')}")
 
     # Crear cliente

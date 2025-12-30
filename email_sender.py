@@ -6,7 +6,6 @@ Envía reportes de auditoría por correo electrónico con archivos adjuntos
 import os
 import logging
 import smtplib
-import base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -28,27 +27,9 @@ class EmailSender:
     def __init__(self):
         """Inicializa configuración SMTP desde variables de entorno"""
         self.smtp_server = os.getenv("SMTP_SERVER", "mail.correo-caf.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))
-        self.smtp_user = os.getenv("SMTP_USER")
-
-        # Leer contraseña desde .env
-        password_raw = os.getenv("SMTP_PASSWORD")
-        if password_raw:
-            # Eliminar comillas si las tiene (por si acaso)
-            password_raw = password_raw.strip('"').strip("'")
-            # La contraseña ya está en UTF-8 si el archivo .env está en UTF-8
-            self.smtp_password = password_raw
-        else:
-            self.smtp_password = None
-
-        self.from_email = os.getenv("SMTP_FROM_EMAIL", self.smtp_user)
+        self.smtp_port = int(os.getenv("SMTP_PORT", "25"))
+        self.from_email = os.getenv("SMTP_FROM_EMAIL", "auditoria@correo-caf.com")
         self.from_name = os.getenv("SMTP_FROM_NAME", "Sistema de Auditoría CAF")
-
-        # Validar credenciales
-        if not self.smtp_user or not self.smtp_password:
-            raise ValueError(
-                "SMTP_USER y SMTP_PASSWORD son requeridos en .env para enviar correos"
-            )
 
         logger.info(f"Cliente SMTP configurado: {self.smtp_server}:{self.smtp_port}")
 
@@ -114,26 +95,8 @@ class EmailSender:
             logger.info(f"Enviando correo a {len(destinatarios)} destinatario(s)...")
             logger.info(f"Archivos adjuntos: {len(archivos_adjuntos)}")
 
-            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                # FIX DEFINITIVO: smtplib.login() falla con caracteres UTF-8
-                # Solución: Usar AUTH LOGIN manual con base64
-                try:
-                    # Intento 1: login() normal (para passwords ASCII)
-                    server.login(self.smtp_user, self.smtp_password)
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    # Intento 2: AUTH LOGIN manual con base64 (para passwords UTF-8)
-                    logger.warning("⚠️ Password con caracteres especiales, usando AUTH LOGIN manual...")
-
-                    # Codificar credenciales en base64 (UTF-8)
-                    user_b64 = base64.b64encode(self.smtp_user.encode('utf-8')).decode('ascii')
-                    pass_b64 = base64.b64encode(self.smtp_password.encode('utf-8')).decode('ascii')
-
-                    # Enviar comandos SMTP manualmente
-                    server.docmd("AUTH LOGIN")
-                    server.docmd(user_b64)
-                    server.docmd(pass_b64)
-
-                # Usar send_message con policy UTF-8
+            # Conexión SMTP sin autenticación (relay interno)
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
                 server.send_message(msg)
 
             logger.info(f"✅ Correo enviado exitosamente")
@@ -142,9 +105,6 @@ class EmailSender:
 
             return True
 
-        except smtplib.SMTPAuthenticationError:
-            logger.error("❌ Error de autenticación SMTP - Verificar usuario/contraseña")
-            return False
         except smtplib.SMTPException as e:
             logger.error(f"❌ Error SMTP al enviar correo: {e}")
             return False
